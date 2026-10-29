@@ -68,8 +68,7 @@ CRITICAL INSTRUCTIONS:
     # 3. List of models to try (fallback strategy for high demand / rate limits)
     candidate_models = [
         "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash"
+        "gemini-2.0-flash"
     ]
 
     answer_text = None
