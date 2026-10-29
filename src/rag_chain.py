@@ -65,10 +65,11 @@ CRITICAL INSTRUCTIONS:
 --- GROUNDED ANSWER ---"""
     )
 
-    # 3. List of models to try (fallback strategy for high demand / rate limits)
+    # 3. Currently active models recommended by Google
     candidate_models = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash"
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite"
     ]
 
     answer_text = None
@@ -104,7 +105,7 @@ CRITICAL INSTRUCTIONS:
             continue
 
     if not answer_text:
-        answer_text = f"The service is experiencing high demand. Please try again. (Error details: {last_error})"
+        answer_text = f"The service is currently experiencing high demand. Please try again. (Details: {last_error})"
 
     return {
         "question": user_question,
