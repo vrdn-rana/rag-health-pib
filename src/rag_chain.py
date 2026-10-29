@@ -6,12 +6,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from dotenv import load_dotenv
 from google import genai
+from langchain_google_genai import ChatGoogleGenerativeAI
 from src.vector_store import search_similar_chunks
 
-# Load environment variables from .env file
+# Load local .env if available
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+def get_api_key() -> str:
+    """Helper to dynamically retrieve key from os.environ or dotenv."""
+    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
 
 
 def format_context_prompt(user_question: str, retrieved_chunks: list[dict]) -> str:
@@ -44,13 +48,14 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     """
     End-to-end RAG pipeline:
     1. Search top_k chunks from ChromaDB.
-    2. Dynamically discover active Gemini models for API key.
-    3. Generate grounded response using Gemini.
+    2. Generate grounded response using Gemini.
     """
-    if not GEMINI_API_KEY:
+    api_key = get_api_key()
+
+    if not api_key:
         return {
             "question": user_question,
-            "answer": "Error: GEMINI_API_KEY is not set. Please create a .env file with GEMINI_API_KEY=your_key",
+            "answer": "Error: GEMINI_API_KEY is not set. Please add GEMINI_API_KEY to Streamlit Secrets or your .env file.",
             "source_chunks": []
         }
 
@@ -60,22 +65,11 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     # 2. Construct grounded prompt
     prompt = format_context_prompt(user_question, chunks)
 
-    # 3. Initialize Gemini Client
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    # 3. Initialize Gemini Client with explicit API key string
+    client = genai.Client(api_key=api_key)
     
-    # Dynamically fetch available models from your API key
-    candidate_models = []
-    try:
-        for m in client.models.list():
-            if "gemini" in m.name.lower():
-                candidate_models.append(m.name)
-    except Exception:
-        pass
-
-    # Add standard fallback aliases if model listing returns empty
-    candidate_models += [
-        "models/gemini-2.0-flash",
-        "models/gemini-1.5-flash",
+    # Preferred models list
+    candidate_models = [
         "gemini-2.0-flash",
         "gemini-1.5-flash"
     ]
@@ -84,7 +78,7 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     last_error = None
     used_model = None
 
-    # Try each available model until one succeeds
+    # Try candidate models
     for model_name in candidate_models:
         try:
             response = client.models.generate_content(
