@@ -69,10 +69,11 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     # 3. Initialize Gemini Client with explicit API key
     client = genai.Client(api_key=api_key)
     
-    # Target models
+    # Active Gemini models (clean names without 'models/' prefix)
     candidate_models = [
+        "gemini-2.5-flash",
         "gemini-2.0-flash",
-        "gemini-1.5-flash"
+        "gemini-flash-latest"
     ]
 
     answer = None
