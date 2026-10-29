@@ -50,14 +50,17 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     1. Search top_k chunks from ChromaDB.
     2. Generate grounded response using Gemini.
     """
-    api_key = get_api_key()
+    api_key = get_api_key().strip().strip('"').strip("'")
 
     if not api_key:
         return {
             "question": user_question,
-            "answer": "Error: GEMINI_API_KEY is not set. Please add GEMINI_API_KEY to Streamlit Secrets or your .env file.",
+            "answer": "Error: GEMINI_API_KEY is not set or empty.",
             "source_chunks": []
         }
+
+    # Pass the sanitized string explicitly
+    client = genai.Client(api_key=api_key)
 
     # 1. Retrieve relevant chunks from ChromaDB
     chunks = search_similar_chunks(user_question, top_k=top_k)

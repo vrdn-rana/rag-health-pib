@@ -3,15 +3,23 @@ import sys
 import streamlit as st
 
 # 1. Fetch API Key from Streamlit Secrets or Environment
-api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
+api_key = (
+    st.secrets.get("GEMINI_API_KEY") 
+    or os.getenv("GEMINI_API_KEY") 
+    or st.secrets.get("GOOGLE_API_KEY") 
+    or os.getenv("GOOGLE_API_KEY")
+)
 
-# 2. Inject into os.environ so backend modules (src.rag_chain) pick it up automatically
-if api_key:
-    os.environ["GEMINI_API_KEY"] = api_key
-    os.environ["GOOGLE_API_KEY"] = api_key
+# 2. Inject into os.environ
+if api_key and len(api_key.strip()) > 10:
+    cleaned_key = api_key.strip().strip('"').strip("'")
+    os.environ["GEMINI_API_KEY"] = cleaned_key
+    os.environ["GOOGLE_API_KEY"] = cleaned_key
+    
+    # Optional debug message (displays masked key in sidebar for confirmation)
+    st.sidebar.success(f"🔑 Key Loaded: `{cleaned_key[:6]}...{cleaned_key[-4:]}`")
 else:
-    st.error("⚠️ Gemini API Key not found! Please set `GEMINI_API_KEY` in Streamlit Community Cloud Secrets.")
-
+    st.sidebar.error("❌ No valid GEMINI_API_KEY found!")
 # Ensure project root directory is in sys.path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
