@@ -87,9 +87,25 @@ if submit_button or (selected_sample != "None" and user_question):
         with st.spinner("Searching document & generating grounded answer..."):
             result = generate_rag_answer(user_question, top_k=top_k)
             
-            # Display Answer
+            # Extract plain text string from result["answer"]
+            answer_data = result["answer"]
+            clean_text = ""
+
+            if isinstance(answer_data, list):
+                # Extract text fields from content blocks
+                text_parts = [
+                    item["text"] for item in answer_data 
+                    if isinstance(item, dict) and "text" in item
+                ]
+                clean_text = "\n".join(text_parts) if text_parts else str(answer_data)
+            elif isinstance(answer_data, dict):
+                clean_text = answer_data.get("text", str(answer_data))
+            else:
+                clean_text = str(answer_data)
+
+            # Display Answer strictly as clean Markdown text
             st.markdown("### 💬 Answer")
-            st.success(result["answer"])
+            st.markdown(clean_text)
             
             # Display Source Chunks
             st.markdown("---")
@@ -99,7 +115,3 @@ if submit_button or (selected_sample != "None" and user_question):
                 with st.expander(f"Chunk #{idx}: {chunk['title']} (ID: {chunk['chunk_id']})"):
                     st.markdown(f"**Relevance Distance:** `{chunk['distance']:.4f}`")
                     st.write(chunk["content"])
-
-# Footer
-st.markdown("---")
-st.caption("📌 **Grounded RAG System:** Answers are generated strictly using semantic vector search over the official PIB backgrounder. No external knowledge is used.")

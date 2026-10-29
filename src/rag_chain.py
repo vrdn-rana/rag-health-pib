@@ -29,9 +29,6 @@ def format_context(retrieved_chunks: list[dict]) -> str:
 
 
 def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
-    """
-    End-to-end RAG pipeline using LangChain Expression Language (LCEL).
-    """
     api_key = get_active_api_key()
 
     if not api_key:
@@ -45,16 +42,15 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     chunks = search_similar_chunks(user_question, top_k=top_k)
     formatted_context = format_context(chunks)
 
-    # 2. Define LangChain Prompt Template
+    # 2. Strict Prompt Template forcing clean plain text
     prompt_template = PromptTemplate(
         input_variables=["context", "question"],
-        template="""You are a precise and helpful AI assistant answering questions about India's Health Transformation.
+        template="""You are a precise AI assistant answering questions about India's Health Transformation.
 
-CRITICAL INSTRUCTIONS:
-1. Answer the question using ONLY the provided PIB context snippets below.
-2. Do NOT use external general knowledge or invent facts not present in the text.
-3. If the provided context does not contain enough information to answer the question, state clearly: "Based on the provided document, I cannot answer this question."
-4. Keep the answer clear, short, structured, and directly aligned with the PIB backgrounder document.
+CRITICAL FORMATTING INSTRUCTIONS:
+- Respond in clean, beautifully structured Markdown text.
+- Do NOT output JSON, dictionary lists, or metadata.
+- Answer strictly based on the provided PIB context below.
 
 --- PROVIDED CONTEXT ---
 {context}
@@ -65,21 +61,18 @@ CRITICAL INSTRUCTIONS:
 --- GROUNDED ANSWER ---"""
     )
 
-    # 3. Currently active models recommended by Google
     candidate_models = [
         "gemini-3.8-flash",
         "gemini-3.5-flash",
         "gemini-3.1-flash-lite"
     ]
 
-    answer_text = None
+    clean_answer = None
     last_error = None
     used_model = None
 
-    # 4. Invoke using pure LangChain Pipe Chain (prompt | llm)
     for model_name in candidate_models:
         try:
-            # Initialize LangChain LLM instance
             llm = ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=api_key,
@@ -87,43 +80,35 @@ CRITICAL INSTRUCTIONS:
                 max_retries=3
             )
 
-            # Build LangChain Runnable Chain
             chain = prompt_template | llm
-
-            # Invoke LangChain Runnable
             response = chain.invoke({
                 "context": formatted_context,
                 "question": user_question
             })
 
-            answer_text = response.content
-            if answer_text:
+            # Extract pure string content
+            if hasattr(response, "content"):
+                res_content = response.content
+                # If res_content is a list (e.g. multi-modal block), parse out the text block
+                if isinstance(res_content, list):
+                    text_parts = [item.get("text", "") for item in res_content if isinstance(item, dict) and "text" in item]
+                    clean_answer = "\n".join(text_parts) if text_parts else str(res_content)
+                else:
+                    clean_answer = str(res_content)
+
+            if clean_answer and len(clean_answer.strip()) > 0:
                 used_model = model_name
                 break
         except Exception as e:
             last_error = str(e)
             continue
 
-    if not answer_text:
-        answer_text = f"The service is currently experiencing high demand. Please try again. (Details: {last_error})"
+    if not clean_answer:
+        clean_answer = f"Error generating answer: {last_error}"
 
     return {
         "question": user_question,
-        "answer": str(answer_text).strip(),
+        "answer": clean_answer.strip(),
         "source_chunks": chunks,
         "model_used": used_model
     }
-
-
-if __name__ == "__main__":
-    test_q = "What is Ayushman Bharat PM-JAY and how many beneficiaries are covered?"
-    print(f"Testing Question: '{test_q}'\n")
-
-    result = generate_rag_answer(test_q, top_k=3)
-
-    print("================ LANGCHAIN LLM ANSWER ================")
-    print(result["answer"])
-    print(f"\n[Generated using model: {result.get('model_used')}]")
-    print("\n================ SOURCES USED ================")
-    for chunk in result["source_chunks"]:
-        print(f"• [{chunk['chunk_id']}] {chunk['title']}")
