@@ -9,13 +9,14 @@ from google import genai
 from langchain_google_genai import ChatGoogleGenerativeAI
 from src.vector_store import search_similar_chunks
 
-# Load local .env if available
+# Load local environment if running locally
 load_dotenv()
 
 
-def get_api_key() -> str:
-    """Helper to dynamically retrieve key from os.environ or dotenv."""
-    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+def get_active_api_key() -> str:
+    """Dynamically retrieve clean API key from environment or secrets."""
+    raw_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
+    return raw_key.strip().strip('"').strip("'")
 
 
 def format_context_prompt(user_question: str, retrieved_chunks: list[dict]) -> str:
@@ -50,17 +51,14 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     1. Search top_k chunks from ChromaDB.
     2. Generate grounded response using Gemini.
     """
-    api_key = get_api_key().strip().strip('"').strip("'")
+    api_key = get_active_api_key()
 
     if not api_key:
         return {
             "question": user_question,
-            "answer": "Error: GEMINI_API_KEY is not set or empty.",
+            "answer": "Error: GEMINI_API_KEY is missing or empty. Please set GEMINI_API_KEY in Streamlit Secrets.",
             "source_chunks": []
         }
-
-    # Pass the sanitized string explicitly
-    client = genai.Client(api_key=api_key)
 
     # 1. Retrieve relevant chunks from ChromaDB
     chunks = search_similar_chunks(user_question, top_k=top_k)
@@ -68,10 +66,10 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     # 2. Construct grounded prompt
     prompt = format_context_prompt(user_question, chunks)
 
-    # 3. Initialize Gemini Client with explicit API key string
+    # 3. Initialize Gemini Client with explicit API key
     client = genai.Client(api_key=api_key)
     
-    # Preferred models list
+    # Target models
     candidate_models = [
         "gemini-2.0-flash",
         "gemini-1.5-flash"
@@ -81,7 +79,6 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
     last_error = None
     used_model = None
 
-    # Try candidate models
     for model_name in candidate_models:
         try:
             response = client.models.generate_content(
@@ -105,17 +102,3 @@ def generate_rag_answer(user_question: str, top_k: int = 3) -> dict:
         "source_chunks": chunks,
         "model_used": used_model
     }
-
-
-if __name__ == "__main__":
-    test_q = "What is Ayushman Bharat PM-JAY and how many beneficiaries are covered?"
-    print(f"Testing Question: '{test_q}'\n")
-
-    result = generate_rag_answer(test_q, top_k=3)
-
-    print("================ LLM ANSWER ================")
-    print(result["answer"])
-    print(f"\n[Generated using model: {result.get('model_used')}]")
-    print("\n================ SOURCES USED ================")
-    for chunk in result["source_chunks"]:
-        print(f"• [{chunk['chunk_id']}] {chunk['title']}")
